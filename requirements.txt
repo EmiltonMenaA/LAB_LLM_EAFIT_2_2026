@@ -1,13 +1,5 @@
-Requirements · TXT
 streamlit>=1.40
-groq>=0.13
-tiktoken>=0.8
-scikit-learn>=1.4
-numpy>=1.26
+openai>=1.50
+pytesseract>=0.3.13
+Pillow>=10.0
 pandas>=2.1
-plotly>=5.20
-# Embeddings locales (Groq no ofrece endpoint de embeddings).
-# Instala torch de forma pesada; si no lo quieres, la app usa LSA (TF-IDF + SVD) como alternativa.
-sentence-transformers>=3.0
- 
-

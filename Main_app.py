@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import base64
 import hashlib
 import json
 import re
@@ -85,24 +86,47 @@ with col_img:
 with col_ocr:
     st.subheader("2. Texto reconocido")
     if archivo:
-        if shutil.which("tesseract") is None:
-            st.error("No se encontró Tesseract. Instálalo siguiendo las instrucciones de README.md y reinicia Streamlit.")
-            texto_ocr = ""
-        else:
-            lang = {"Español": "spa", "Inglés": "eng", "Español + inglés": "spa+eng"}[idioma_ocr]
+        image_id = hashlib.sha256(archivo.getvalue()).hexdigest()[:16]
+        ocr_key = f"ocr_text_{image_id}"
+        if ocr_key not in st.session_state:
+            if shutil.which("tesseract") is not None:
+                lang = {"Español": "spa", "Inglés": "eng", "Español + inglés": "spa+eng"}[idioma_ocr]
+                try:
+                    st.session_state[ocr_key] = pytesseract.image_to_string(
+                        ImageOps.grayscale(imagen), lang=lang
+                    ).strip()
+                except Exception as exc:
+                    st.warning(f"Tesseract no pudo leer esta imagen ({exc}). Puedes probar OpenAI Vision.")
+                    st.session_state[ocr_key] = ""
+            else:
+                st.info("Tesseract no está instalado. Puedes instalarlo o extraer el texto con OpenAI Vision.")
+                st.session_state[ocr_key] = ""
+        if not st.session_state[ocr_key] and st.button(
+            "Extraer texto con OpenAI Vision", disabled=not api_key.strip(), key=f"vision_{image_id}"
+        ):
             try:
-                procesada = ImageOps.grayscale(imagen)
-                texto_ocr = pytesseract.image_to_string(procesada, lang=lang).strip()
-                image_id = hashlib.sha256(archivo.getvalue()).hexdigest()[:16]
-                ocr_key = f"ocr_text_{image_id}"
-                st.text_area("OCR editable", value=texto_ocr, height=260, key=ocr_key)
-                texto_ocr = st.session_state[ocr_key]
-            except pytesseract.TesseractNotFoundError:
-                texto_ocr = ""
-                st.error("Tesseract no está disponible. Revisa la instalación local.")
+                mime = archivo.type or "image/png"
+                encoded = base64.b64encode(archivo.getvalue()).decode("ascii")
+                vision_client = OpenAI(api_key=api_key.strip())
+                with st.spinner("Reconociendo el texto de la imagen con OpenAI Vision…"):
+                    vision_result = vision_client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"Transcribe exactamente todo el texto visible en esta imagen. Conserva el idioma {idioma_ocr}, los párrafos y la puntuación. Devuelve solo la transcripción, sin comentarios."},
+                                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}},
+                            ],
+                        }],
+                        max_tokens=2000,
+                        temperature=0,
+                    )
+                st.session_state[ocr_key] = vision_result.choices[0].message.content or ""
+                st.rerun()
             except Exception as exc:
-                texto_ocr = ""
-                st.error(f"Falló el OCR: {exc}. Confirma que el paquete de idioma esté instalado.")
+                st.error(f"No se pudo extraer el texto con OpenAI Vision: {exc}")
+        st.text_area("OCR editable", height=260, key=ocr_key)
+        texto_ocr = st.session_state[ocr_key]
     else:
         st.info("Carga una imagen para iniciar el reconocimiento.")
         texto_ocr = ""

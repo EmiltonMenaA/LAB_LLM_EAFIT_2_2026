@@ -63,6 +63,11 @@ st.session_state.setdefault("corpus", CORPUS_DEFECTO)
 st.session_state.setdefault("historial", [])
 st.session_state.setdefault("conectado", False)
 
+# API key por defecto (se precarga en la barra lateral y puede editarse desde la UI).
+# ATENCIÓN: no subas este archivo a un repositorio ni lo compartas con la clave dentro.
+GROQ_API_KEY_DEFECTO = "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"
+st.session_state.setdefault("api_key", GROQ_API_KEY_DEFECTO)
+
 
 def es_llm(model_id: str) -> bool:
     return not any(x in model_id.lower() for x in EXCLUIDOS)
@@ -318,6 +323,9 @@ with st.sidebar:
         help="Se guarda solo en la sesión del navegador.",
     )
     if st.button("Conectar", type="primary"):
+        conectar()
+    elif not st.session_state.conectado and not st.session_state.get("auto_intento"):
+        st.session_state.auto_intento = True
         conectar()
     if st.session_state.conectado:
         st.success(f"Conectado · {len(st.session_state.modelos)} LLMs disponibles")
